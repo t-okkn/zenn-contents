@@ -20,7 +20,6 @@ topics: ["rust", "初心者", "学習日記"]
 published: true
 price: 0
 toc_depth: 2
-allow_override: true
 chapters:
   - 00_hello-world
   - 01_fizzbuzz
