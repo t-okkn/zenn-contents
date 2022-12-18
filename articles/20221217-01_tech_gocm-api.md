@@ -114,9 +114,9 @@ const (
 	ED25519           PrivateKeyAlgorithm = "ED25519"
 )
 
-/*
-RSA PrivateKeyを生成します
-*/
+// RSA PrivateKeyを生成します
+//
+// ※2048bit, 4096bitにのみ対応しています
 func GenerateRSAKey(bits int) (PrivateKey, error) {
 	if bits != 2048 && bits != 4096 {
 		e := fmt.Sprintf("指定したビット数（%dbit）には対応していません", bits)
@@ -137,9 +137,9 @@ func GenerateRSAKey(bits int) (PrivateKey, error) {
 	return k, nil
 }
 
-/*
-ECDSA PrivateKeyを生成します
-*/
+// ECDSA PrivateKeyを生成します
+//
+// ※P-256, P-384, P-521にのみ対応しています
 func GenerateECDSAKey(bits int) (PrivateKey, error) {
 	var curve elliptic.Curve
 
@@ -172,9 +172,7 @@ func GenerateECDSAKey(bits int) (PrivateKey, error) {
 	return k, nil
 }
 
-/*
-ED25519 PrivateKeyを生成します
-*/
+//ED25519 PrivateKeyを生成します
 func GenerateED25519Key() (PrivateKey, error) {
 	_, priv, err := ed25519.GenerateKey(rand.Reader)
 
@@ -233,9 +231,7 @@ const (
 	CLIENT            CertType = "CLIENT"
 )
 
-/*
-CA証明書を作成します
-*/
+// CA証明書を発行します
 func CreateCACert(req *CreateCACertRequest) (*CertData, error) {
 
 	created := time.Now()
@@ -275,9 +271,7 @@ func CreateCACert(req *CreateCACertRequest) (*CertData, error) {
 	return &data, nil
 }
 
-/*
-x509.CreateCertificateをラッピングし、証明書のPEMデータを取得します
-*/
+// x509.CreateCertificate関数をラッピングし、PEM形式の証明書データを出力します
 func createCertificate(template *x509.Certificate, parent *x509.Certificate,
 	pub crypto.PublicKey, priv crypto.Signer) (string, error) {
 
@@ -329,9 +323,8 @@ DBで保管しているPEM形式の証明書をAPI経由でレスポンスとし
 
 # 苦労話など
 今回もハマった点でも記事にすればいいやと思っていたのですが、驚くほどスムーズにコードが書けてしまったのでほとんど話すことがないです😅
-
 強いて言うならコードの設計に一番時間をかけました。
-~~`v0.0.1` の `server.go` はまだリファクタリングが終わっていないので汚い状態ですが。。。（間に合いませんでした。）~~
+
 
 少しだけハマった点はありますので、記載できたらなと思います。
 
