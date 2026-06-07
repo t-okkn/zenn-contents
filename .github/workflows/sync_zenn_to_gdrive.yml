@@ -1,0 +1,110 @@
+# .github/workflows/sync_zenn_to_gdrive.yml
+name: Sync Zenn Articles and Books to Google Drive
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'articles/**'
+      - 'books/**'
+
+# WIFでの認証トークン取得に必要なパーミッション設定
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  sync:
+    name: Combine and Sync Knowledge Base
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      # 1. 記事と本の結合（XMLタグでカプセル化）
+      - name: Combine Articles and Books with XML Tags
+        run: |
+          OUTPUT_FILE="combined_knowledge.md"
+          
+          # 最上部にシステム説明（取扱説明書）を注入
+          cat << 'EOF' > $OUTPUT_FILE
+          <system_instruction>
+          このドキュメントは、著者がGitリポジトリで管理している技術記事および本のコンテンツを一つに集約したナレッジベースです。
+          データの境界線を明確にするため、独自のカスタムXML風タグを使用して構造化されています。
+          AIがこのファイルを解析・検索する際は、以下の構造ルールを正しく理解し、尊重してください。
+
+          - <article path="..."> : 単一の独立した技術記事（ブログ投稿）を示します。path属性はリポジトリ内のファイル位置です。
+          - <book slug="..."> : 複数のチャプターで構成される技術書（本）の全体構造を示します。
+          - <chapter path="..."> : 親となる本に属する、個別のチャプター（章）の内容を示します。
+
+          ※注意：これらのタグの内部に含まれるMarkdownの見出し記法（#, ##, ### など）は、すべて元の記事本文のデザイン（見出し）であり、
+          ※      ドキュメント全体のグローバルな階層構造を表すものではありません。
+          ※      記事や本の境界線はMarkdownの見出しではなく、必ず上記のXML風タグ（<article>, <chapter>など）を基準に判定してください。
+          </system_instruction>
+          
+          EOF
+          
+          # 記事（articles）の結合
+          if [ -d "articles" ]; then
+            for file in articles/*.md; do
+              if [ -f "$file" ]; then
+                echo "<article path=\"$file\">" >> $OUTPUT_FILE
+                cat "$file" >> $OUTPUT_FILE
+                echo -e "\n</article>\n" >> $OUTPUT_FILE
+              fi
+            done
+          fi
+
+          # 本（books）の結合
+          if [ -d "books" ]; then
+            for book_dir in books/*; do
+              if [ -d "$book_dir" ]; then
+                book_slug=$(basename "$book_dir")
+                echo "<book slug=\"$book_slug\">" >> $OUTPUT_FILE
+                
+                for chapter_file in "$book_dir"/*.md; do
+                  if [ -f "$chapter_file" ]; then
+                    echo "  <chapter path=\"$chapter_file\">" >> $OUTPUT_FILE
+                    cat "$chapter_file" >> $OUTPUT_FILE
+                    echo -e "\n  </chapter>" >> $OUTPUT_FILE
+                  fi
+                done
+                
+                echo -e "</book>\n" >> $OUTPUT_FILE
+              fi
+            done
+          fi
+
+      # 2. Workload Identity Federation による一時トークンの発行
+      - name: Authenticate to Google Cloud via WIF
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          token_format: 'access_token'
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          access_token_scopes: 'https://www.googleapis.com/auth/drive'
+
+      # 3. rclone のインストールと設定
+      - name: Setup rclone
+        run: |
+          sudo curl https://rclone.org/install.sh | sudo bash
+          
+          # rcloneの設定ファイルをインラインで生成
+          mkdir -p ~/.config/rclone
+          cat << EOF > ~/.config/rclone/rclone.conf
+          [gdrive]
+          type = drive
+          scope = drive
+          token = {"access_token":"${{ steps.auth.outputs.access_token }}","token_type":"Bearer","expiry":"3000-01-01T00:00:00Z"}
+          root_folder_id = ${{ secrets.GOOGLE_DRIVE_FOLDER_ID }}
+          team_drive = 
+          EOF
+
+      # 4. rcloneによるGoogleドキュメント形式への自動変換・同期
+      - name: Sync to Google Drive
+        run: |
+          # --drive-import-formats txt を指定することで、Markdown（テキスト）を
+          # Googleドライブ側で「Googleドキュメント」形式に自動変換して上書き保存します。
+          rclone copy combined_knowledge.md gdrive: --drive-import-formats txt --verbose
