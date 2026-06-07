@@ -107,4 +107,4 @@ jobs:
         run: |
           # --drive-import-formats txt を指定することで、Markdown（テキスト）を
           # Googleドライブ側で「Googleドキュメント」形式に自動変換して上書き保存します。
-          rclone copy combined_knowledge.md gdrive: --drive-import-formats txt --verbose
+          rclone copy combined_knowledge.md gdrive: --drive-import-formats txt --drive-supports-team-drives --verbose
