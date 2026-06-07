@@ -99,7 +99,7 @@ jobs:
           scope = drive
           token = {"access_token":"${{ steps.auth.outputs.access_token }}","token_type":"Bearer","expiry":"3000-01-01T00:00:00Z"}
           root_folder_id = ${{ secrets.GOOGLE_DRIVE_FOLDER_ID }}
-          team_drive = 
+          keep_revision_forever = true
           EOF
 
       # 4. rcloneによるGoogleドキュメント形式への自動変換・同期
@@ -107,4 +107,4 @@ jobs:
         run: |
           # --drive-import-formats txt を指定することで、Markdown（テキスト）を
           # Googleドライブ側で「Googleドキュメント」形式に自動変換して上書き保存します。
-          rclone copy combined_knowledge.md gdrive: --drive-import-formats txt --drive-supports-team-drives --verbose
+          rclone copy combined_knowledge.md gdrive: --drive-import-formats txt --verbose
