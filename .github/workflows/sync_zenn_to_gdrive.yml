@@ -104,17 +104,51 @@ jobs:
           echo "gdrive CLI のインストールが完了しました："
           gdrive version
 
-      # 4. 指定されたファイルIDへ「常にUpdate（上書き）」を実行
+      # 4. 指定されたファイル構造を動的に生成し、上書き同期（Update）を実行
       - name: Sync to Google Drive (Always Update)
         run: |
-          # SecretsからファイルIDと一時トークンを環境変数にセット
-          FILE_ID="${{ secrets.GOOGLE_DRIVE_FILE_ID }}"
-          TOKEN="${{ steps.auth.outputs.access_token }}"
+          # 1. 設定ファイル用のディレクトリを作成
+          mkdir -p ~/.config/gdrive3/WIF
           
-          echo "=== ファイルID: $FILE_ID に対して上書き同期を実行します ==="
+          # 2. account.json の生成 (アクティブアカウントを WIF に固定)
+          cat << 'EOF' > ~/.config/gdrive3/account.json
+          {
+            "current": "WIF"
+          }
+          EOF
           
-          # 常に指定IDを狙い撃ちでupdateします。
-          # もし所有権やQuotaの問題で失敗した場合は、CIが綺麗にエラーで落ちるので手動対応が可能です。
-          gdrive --access-token "$TOKEN" files update \
+          # 3. secret.json の生成 (ダミーデータ)
+          cat << 'EOF' > ~/.config/gdrive3/WIF/secret.json
+          {
+            "client_id": "",
+            "client_secret": ""
+          }
+          EOF
+          
+          # 4. tokens.json の生成 (access_token 以外はダミーデータ)
+          cat << EOF > ~/.config/gdrive3/WIF/tokens.json
+          [
+            {
+              "scopes": [
+                "https://www.googleapis.com/auth/drive"
+              ],
+              "token": {
+                "access_token": "${{ steps.auth.outputs.access_token }}",
+                "refresh_token": "",
+                "expires_at": [3000, 1, 1, 1, 0, 0, 0, 0, 0],
+                "id_token": null
+              }
+            }
+          ]
+          EOF
+          
+          echo "=== 認証用の設定ファイル(JSON)生成が完了しました ==="
+          echo "=== 現在アクティブな gdrive アカウントの確認 ==="
+          gdrive account current
+          
+          echo "=== Google Drive への上書き（Update）を実行します ==="
+          
+          # 5. 現在のアカウント（WIF）で冪等性を担保した上書きを実行
+          gdrive files update \
             --mime "application/vnd.google-apps.document" \
-            "$FILE_ID" combined_knowledge.md
+            "${{ secrets.GOOGLE_DRIVE_FILE_ID }}" combined_knowledge.md
