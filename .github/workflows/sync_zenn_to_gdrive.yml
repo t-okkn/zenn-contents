@@ -86,25 +86,41 @@ jobs:
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
           access_token_scopes: 'https://www.googleapis.com/auth/drive'
 
-      # 3. rclone のインストールと設定
-      - name: Setup rclone
+      # 3. GitHub Releases の latest からダウンロードURLを動的に抽出してインストール
+      - name: Setup gdrive CLI (Always Latest Version)
         run: |
-          sudo curl https://rclone.org/install.sh | sudo bash
+          echo "=== GitHub Releases から最新のダウンロードURLを取得中 ==="
           
-          # rcloneの設定ファイルをインラインで生成
-          mkdir -p ~/.config/rclone
-          cat << EOF > ~/.config/rclone/rclone.conf
-          [gdrive]
-          type = drive
-          scope = drive
-          token = {"access_token":"${{ steps.auth.outputs.access_token }}","token_type":"Bearer","expiry":"3000-01-01T00:00:00Z"}
-          root_folder_id = ${{ secrets.GOOGLE_DRIVE_FOLDER_ID }}
-          keep_revision_forever = true
-          EOF
+          # GitHub APIから、最新リリースの「gdrive_linux-x64.tar.gz」に一致する直リンクURLを動的に抽出
+          DOWNLOAD_URL=$(curl -s https://api.github.com/repos/glotlabs/gdrive/releases/latest \
+            | jq -r '.assets[] | select(.name == "gdrive_linux-x64.tar.gz") | .browser_download_url')
+          
+          if [ -z "$DOWNLOAD_URL" ] || [ "$DOWNLOAD_URL" = "null" ]; then
+            echo "エラー: 対象のバイナリ（gdrive_linux-x64.tar.gz）が見つかりませんでした。古いアセット名（gdrive_linux_amd64.tar.gz）で再検索します。"
+            DOWNLOAD_URL=$(curl -s https://api.github.com/repos/glotlabs/gdrive/releases/latest \
+              | jq -r '.assets[] | select(.name == "gdrive_linux_amd64.tar.gz") | .browser_download_url')
+          fi
+          
+          echo "最新のダウンロードURL [ ${DOWNLOAD_URL} ] を取得しました。"
+          
+          # 抽出したURLから直接ダウンロードして展開
+          curl -sL "$DOWNLOAD_URL" | tar xz
+          sudo mv gdrive /usr/local/bin/
+          
+          echo "gdrive CLI のインストールが完了しました："
+          gdrive version
 
-      # 4. rcloneによるGoogleドキュメント形式への自動変換・同期
-      - name: Sync to Google Drive
+      # 4. 指定されたファイルIDへ「常にUpdate（上書き）」を実行
+      - name: Sync to Google Drive (Always Update)
         run: |
-          # --drive-import-formats txt を指定することで、Markdown（テキスト）を
-          # Googleドライブ側で「Googleドキュメント」形式に自動変換して上書き保存します。
-          rclone copy combined_knowledge.md gdrive: --drive-import-formats txt --verbose
+          # SecretsからファイルIDと一時トークンを環境変数にセット
+          FILE_ID="${{ secrets.GOOGLE_DRIVE_FILE_ID }}"
+          TOKEN="${{ steps.auth.outputs.access_token }}"
+          
+          echo "=== ファイルID: $FILE_ID に対して上書き同期を実行します ==="
+          
+          # 常に指定IDを狙い撃ちでupdateします。
+          # もし所有権やQuotaの問題で失敗した場合は、CIが綺麗にエラーで落ちるので手動対応が可能です。
+          gdrive --access-token "$TOKEN" files update \
+            --mime "application/vnd.google-apps.document" \
+            "$FILE_ID" combined_knowledge.md
