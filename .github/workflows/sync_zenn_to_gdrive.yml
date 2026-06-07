@@ -95,12 +95,6 @@ jobs:
           DOWNLOAD_URL=$(curl -s https://api.github.com/repos/glotlabs/gdrive/releases/latest \
             | jq -r '.assets[] | select(.name == "gdrive_linux-x64.tar.gz") | .browser_download_url')
           
-          if [ -z "$DOWNLOAD_URL" ] || [ "$DOWNLOAD_URL" = "null" ]; then
-            echo "エラー: 対象のバイナリ（gdrive_linux-x64.tar.gz）が見つかりませんでした。古いアセット名（gdrive_linux_amd64.tar.gz）で再検索します。"
-            DOWNLOAD_URL=$(curl -s https://api.github.com/repos/glotlabs/gdrive/releases/latest \
-              | jq -r '.assets[] | select(.name == "gdrive_linux_amd64.tar.gz") | .browser_download_url')
-          fi
-          
           echo "最新のダウンロードURL [ ${DOWNLOAD_URL} ] を取得しました。"
           
           # 抽出したURLから直接ダウンロードして展開
