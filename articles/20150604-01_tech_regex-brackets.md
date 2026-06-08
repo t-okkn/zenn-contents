@@ -4,7 +4,7 @@ emoji: "🗂️"
 type: "tech"
 topics: ["正規表現", "sed"]
 published: true
-published_at: 2015-06-04 14:55
+published_at: 2015-06-04 01:04
 ---
 
 ちょっと嵌ったので覚書。
